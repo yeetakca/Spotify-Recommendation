@@ -3,10 +3,10 @@ package com.spotify.backend;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
-import org.springframework.web.util.UriComponentsBuilder;
 
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -19,6 +19,16 @@ public class SpotifyService {
     private static final String CLIENT_ID = "a71823ac4def4f24949a429bf9f056df";
     private static final String CLIENT_SECRET = "58b06a61d6b74215be2fbb1eb45aa32b";
     private static final String AUTHORIZATION_URL = "https://accounts.spotify.com/api/token";
+    private static List<String> trackstoExclude = new ArrayList<>();
+
+
+    private final RestTemplate restTemplate;
+    private final ObjectMapper objectMapper;
+
+    public SpotifyService() {
+        restTemplate = new RestTemplate();
+        objectMapper = new ObjectMapper();
+    }
 
     public String getAccessToken() {
         HttpHeaders headers = new HttpHeaders();
@@ -26,11 +36,14 @@ public class SpotifyService {
         headers.setBasicAuth(CLIENT_ID, CLIENT_SECRET);
 
         HttpEntity<String> request = new HttpEntity<>("grant_type=client_credentials", headers);
+        URI uri;
+        try {
+            uri = new URI(AUTHORIZATION_URL);
+        } catch (URISyntaxException e) {
+            throw new RuntimeException("Invalid authorization URL", e);
+        }
 
-        UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(AUTHORIZATION_URL);
-
-        RestTemplate restTemplate = new RestTemplate();
-        ResponseEntity<SpotifyTokenResponse> response = restTemplate.exchange(builder.toUriString(), HttpMethod.POST, request, SpotifyTokenResponse.class);
+        ResponseEntity<SpotifyTokenResponse> response = restTemplate.exchange(uri, HttpMethod.POST, request, SpotifyTokenResponse.class);
 
         if (response.getStatusCode() == HttpStatus.OK) {
             SpotifyTokenResponse tokenResponse = response.getBody();
@@ -42,112 +55,120 @@ public class SpotifyService {
         throw new IllegalStateException("Failed to retrieve access token from Spotify API");
     }
 
-    public String getTrack(String trackId) throws URISyntaxException {
+//    public String getTrack(String trackId) {
+//        String endpoint = SPOTIFY_API_BASE_URL + "/tracks/" + trackId;
+//        return performRequest(endpoint);
+//    }
 
-        String endpoint = SPOTIFY_API_BASE_URL + "/tracks/" + trackId;
-
-        return giveOutput(endpoint);
-    }
-
-    public String getPlaylist(String playlistId) throws URISyntaxException {
-
+    public String getPlaylist(String playlistId) {
         String endpoint = SPOTIFY_API_BASE_URL + "/playlists/" + playlistId;
-
-        return giveOutput(endpoint);
+        return performRequest(endpoint, trackstoExclude);
     }
 
-    public String getFeatures(String trackId) throws URISyntaxException {
-
+    public String getFeatures(String trackId) {
         String endpoint = SPOTIFY_API_BASE_URL + "/audio-features/" + trackId;
-
-        return giveOutput(endpoint);
+        return performRequest(endpoint, trackstoExclude);
     }
 
-    public String getRecs(String trackId) throws URISyntaxException {
-
-        ObjectMapper map = new ObjectMapper();
+    public String getTrackRecs(String trackId) {
+        String features = getFeatures(trackId);
         JsonNode node;
         try {
-            node = map.readTree(getFeatures(trackId));
+            node = objectMapper.readTree(features);
         } catch (JsonProcessingException e) {
             throw new RuntimeException(e);
         }
 
-        String endpoint = SPOTIFY_API_BASE_URL + "/recommendations?limit=" + 3 + "&seed_tracks=" + trackId + "&target_acousticness=" + node.get("acousticness") + "&target_danceability=" + node.get("danceability") + "&target_energy=" + node.get("energy") + "&target_instrumentalness=" + node.get("instrumentalness") + "&target_liveness=" + node.get("liveness") + "&target_loudness=" + node.get("loudness") + "&target_speechiness=" + node.get("speechiness") + "&target_tempo=" + node.get("tempo") + "&target_valence=" + node.get("valence");
-        return giveOutput(endpoint);
+        StringBuilder endpointBuilder = new StringBuilder(SPOTIFY_API_BASE_URL + "/recommendations");
+        endpointBuilder.append("?limit=15")
+                .append("&seed_tracks=").append(trackId)
+                .append("&target_acousticness=").append(node.get("acousticness"))
+                .append("&target_danceability=").append(node.get("danceability"))
+                .append("&target_energy=").append(node.get("energy"))
+                .append("&target_instrumentalness=").append(node.get("instrumentalness"))
+                .append("&target_liveness=").append(node.get("liveness"))
+                .append("&target_loudness=").append(node.get("loudness"))
+                .append("&target_speechiness=").append(node.get("speechiness"))
+                .append("&target_tempo=").append(node.get("tempo"))
+                .append("&target_valence=").append(node.get("valence"));
+
+        String endpoint = endpointBuilder.toString();
+        trackstoExclude.add(trackId);
+        return performRequest(endpoint, trackstoExclude);
     }
 
-    public String getReccs(String playlistId) throws URISyntaxException {
+    public String getPlaylistRec(String playlistId) {
+        String playlist = getPlaylist(playlistId);
+        JsonNode playlistNode, featuresNode;
+        List<String> trackIds = new ArrayList<>();
+        List<String> artists = new ArrayList<>();
+        float acousticness = 0, danceability = 0, energy = 0, instrumentalness = 0, liveness = 0, loudness = 0,
+                speechiness = 0, tempo = 0, valence = 0;
 
-        ObjectMapper map = new ObjectMapper();
-        JsonNode node;
-        ArrayList<String> trackIds = new ArrayList<>();
-        ArrayList<String> artists = new ArrayList<>();
-        float acousticness = 0;
-        float danceability = 0;
-        float energy = 0;
-        float instrumentalness = 0;
-        float liveness = 0;
-        float loudness = 0;
-        float speechiness = 0;
-        float tempo = 0;
-        float valence = 0;
-
-        ArrayList<String> commonArtists;
         try {
-            node = map.readTree(getPlaylist(playlistId));
-            node.get("tracks").get("items").forEach((track) -> {
-                trackIds.add(track.get("track").get("id").toString().replaceAll("\"", ""));
-                artists.add(track.get("track").get("artists").get(0).get("id").toString().replaceAll("\"", ""));
-            });
-            for (String trackId : trackIds) {
-                node = map.readTree(getFeatures(trackId));
-                acousticness += Float.parseFloat(String.valueOf(node.get("acousticness")));
-                danceability += Float.parseFloat(String.valueOf(node.get("danceability")));
-                energy += Float.parseFloat(String.valueOf(node.get("energy")));
-                instrumentalness += Float.parseFloat(String.valueOf(node.get("instrumentalness")));
-                liveness += Float.parseFloat(String.valueOf(node.get("liveness")));
-                loudness += Float.parseFloat(String.valueOf(node.get("loudness")));
-                speechiness += Float.parseFloat(String.valueOf(node.get("speechiness")));
-                tempo += Float.parseFloat(String.valueOf(node.get("tempo")));
-                valence += Float.parseFloat(String.valueOf(node.get("valence")));
+            playlistNode = objectMapper.readTree(playlist);
+            JsonNode tracksNode = playlistNode.get("tracks").get("items");
+            for (JsonNode track : tracksNode) {
+                String trackId = track.get("track").get("id").asText();
+                trackIds.add(trackId);
+                String artistId = track.get("track").get("artists").get(0).get("id").asText();
+                artists.add(artistId);
             }
-            acousticness /= trackIds.size();
-            danceability /= trackIds.size();
-            energy /= trackIds.size();
-            instrumentalness /= trackIds.size();
-            liveness /= trackIds.size();
-            loudness /= trackIds.size();
-            speechiness /= trackIds.size();
-            tempo /= trackIds.size();
-            valence /= trackIds.size();
+            for (String trackId : trackIds) {
+                String features = getFeatures(trackId);
+                featuresNode = objectMapper.readTree(features);
+                acousticness += featuresNode.get("acousticness").floatValue();
+                danceability += featuresNode.get("danceability").floatValue();
+                energy += featuresNode.get("energy").floatValue();
+                instrumentalness += featuresNode.get("instrumentalness").floatValue();
+                liveness += featuresNode.get("liveness").floatValue();
+                loudness += featuresNode.get("loudness").floatValue();
+                speechiness += featuresNode.get("speechiness").floatValue();
+                tempo += featuresNode.get("tempo").floatValue();
+                valence += featuresNode.get("valence").floatValue();
+            }
+            int numTracks = trackIds.size();
+            acousticness /= numTracks;
+            danceability /= numTracks;
+            energy /= numTracks;
+            instrumentalness /= numTracks;
+            liveness /= numTracks;
+            loudness /= numTracks;
+            speechiness /= numTracks;
+            tempo /= numTracks;
+            valence /= numTracks;
 
-            commonArtists = findCommonArtist(artists);
-            System.out.println(commonArtists);
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException(e);
-        }
-        String endpoint = SPOTIFY_API_BASE_URL + "/recommendations?limit=" + 3;
+            List<String> commonArtists = findCommonArtists(artists);
 
-        if (!commonArtists.isEmpty()) {
-            StringBuilder artistsParam = new StringBuilder();
-            int numArtists = Math.min(5, commonArtists.size());
-            for (int i = 0; i < numArtists; i++) {
-                artistsParam.append(commonArtists.get(i));
-                if (i != numArtists - 1) {
-                    artistsParam.append("%2C");
+            StringBuilder endpointBuilder = new StringBuilder(SPOTIFY_API_BASE_URL + "/recommendations");
+            endpointBuilder.append("?limit=15");
+
+            if (!commonArtists.isEmpty()) {
+                int numArtists = Math.min(5, commonArtists.size());
+                for (int i = 0; i < numArtists; i++) {
+                    endpointBuilder.append("&seed_artists=").append(commonArtists.get(i));
                 }
             }
-            endpoint += "&seed_artists=" + artistsParam;
-        }
 
-        endpoint += "&target_acousticness=" + acousticness + "&target_danceability=" + danceability + "&target_energy=" + energy + "&target_instrumentalness=" + instrumentalness + "&target_liveness=" + liveness + "&target_loudness=" + loudness + "&target_speechiness=" + speechiness + "&target_tempo=" + tempo + "&target_valence=" + valence;
-        System.out.println(endpoint);
-        return giveOutput(endpoint);
+            endpointBuilder.append("&target_acousticness=").append(acousticness)
+                    .append("&target_danceability=").append(danceability)
+                    .append("&target_energy=").append(energy)
+                    .append("&target_instrumentalness=").append(instrumentalness)
+                    .append("&target_liveness=").append(liveness)
+                    .append("&target_loudness=").append(loudness)
+                    .append("&target_speechiness=").append(speechiness)
+                    .append("&target_tempo=").append(tempo)
+                    .append("&target_valence=").append(valence);
+
+            String endpoint = endpointBuilder.toString();
+            trackstoExclude.addAll(trackIds);
+            return performRequest(endpoint, trackstoExclude);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(e);
+        }
     }
 
-    private ArrayList<String> findCommonArtist(ArrayList<String> artists) {
-        int n = artists.size();
+    private List<String> findCommonArtists(List<String> artists) {
         HashMap<String, Integer> artistCount = new HashMap<>();
 
         for (String artist : artists) {
@@ -157,7 +178,7 @@ public class SpotifyService {
         List<Map.Entry<String, Integer>> sortedEntries = new ArrayList<>(artistCount.entrySet());
         sortedEntries.sort(Map.Entry.comparingByValue(Comparator.reverseOrder()));
 
-        ArrayList<String> commonArtists = new ArrayList<>();
+        List<String> commonArtists = new ArrayList<>();
         int count = 0;
         for (Map.Entry<String, Integer> entry : sortedEntries) {
             commonArtists.add(entry.getKey());
@@ -170,18 +191,48 @@ public class SpotifyService {
         return commonArtists;
     }
 
-    private String giveOutput(String endpoint) throws URISyntaxException {
+    private String performRequest(String endpoint, List<String> trackstoExclude) {
         String accessToken = getAccessToken();
 
         HttpHeaders headers = new HttpHeaders();
         headers.set("Authorization", "Bearer " + accessToken);
         headers.set(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE);
 
-        RequestEntity<?> request = new RequestEntity<>(headers, HttpMethod.GET, new URI(endpoint));
+        HttpEntity<?> request = new HttpEntity<>(headers);
+        JsonNode recNode;
 
-        RestTemplate restTemplate = new RestTemplate();
-        ResponseEntity<String> response = restTemplate.exchange(request, String.class);
-        if (response.getStatusCode().is2xxSuccessful()) {
+        ResponseEntity<String> response = restTemplate.exchange(endpoint, HttpMethod.GET, request, String.class);
+        if (trackstoExclude != null && !trackstoExclude.isEmpty() && response.getStatusCode().is2xxSuccessful()) {
+            try {
+                recNode = objectMapper.readTree(response.getBody());
+                System.out.println(trackstoExclude);
+                for (int i = 0; i < recNode.get("tracks").size(); i++) {
+                    System.out.println(recNode.get("tracks").get(i).get("id").toString().replaceAll("\"", ""));
+                }
+                int size = recNode.get("tracks").size();
+                int index = -1;
+                for (int i = 0; i < size; i++) {
+                    for (String s : trackstoExclude) {
+                        if (s.equals(recNode.get("tracks").get(i).get("id").toString().replaceAll("\"", ""))) {
+                            index = i;
+                        }
+                    }
+                }
+                if (index != -1) {
+                    ((ArrayNode) recNode.get("tracks")).remove(index);
+                    System.out.println(index + "silindi");
+                }
+                for (int i = 0; i < recNode.get("tracks").size(); i++) {
+                    System.out.println(recNode.get("tracks").get(i).get("id"));
+                }
+
+                trackstoExclude.clear();
+                return recNode.toString();
+            } catch (JsonProcessingException e) {
+                throw new RuntimeException(e);
+            }
+        } else if (response.getStatusCode().is2xxSuccessful() && trackstoExclude.isEmpty()) {
+            trackstoExclude.clear();
             return response.getBody();
         } else {
             throw new RuntimeException("Failed to retrieve track information");
