@@ -1,0 +1,6 @@
+<nav>
+    <i *ngIf="songMode" class="fa-solid fa-music" (click)="toggleMode()"></i>
+    <i *ngIf="!songMode" class="fa-solid fa-list" (click)="toggleMode()"></i>
+    <h1>SongScout</h1>
+    <i class="fa-solid fa-magnifying-glass" (click)="toggleSearchBar()"></i>
+</nav>

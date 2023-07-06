@@ -1,0 +1,61 @@
+main {
+    width: 100%;
+    min-height: 100vh;
+    background-color: rgb(50, 50, 50);
+
+    .page-content-container {
+        padding: 4rem;
+
+        .spotify-iframe {
+            iframe {
+                max-width: calc(800px + 2rem);
+            }
+        }
+
+        .suggestion-container {
+            max-width: calc(800px + 2rem);
+            margin: auto;
+
+            hr {
+                margin: 4rem 0rem;
+            }
+
+            .loader {
+                border: 4px solid rgb(125, 125, 125);
+                border-radius: 50%;
+                border-top: 4px solid rgb(31, 214, 96);
+                width: 40px;
+                height: 40px;
+                animation: spin 2s linear infinite;
+            }
+
+            .card-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+                grid-gap: 1rem;
+            }
+        }
+    }
+
+    .preview-control-container {
+        position: sticky;
+        bottom: 1rem;
+        left: 0;
+        margin-left: 1rem;
+    }
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+@media only screen and (max-width: 670px) {
+    main {
+        .preview-control-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+    }
+}

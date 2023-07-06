@@ -1,0 +1,11 @@
+<div class="card-container">
+    <div class="card-left">
+        <img src="{{song.albumCover}}" alt="Album Cover">
+        <i class="fa-solid fa-play" (click)="playSong()"></i>
+    </div>
+    <div class="card-right">
+        <a href="{{song.albumLink}}" target="_blank"><p class="album-name">{{song.albumName}}</p></a>
+        <a href="{{song.songLink}}" target="_blank"><p class="song-name">{{song.songName}}</p></a>
+        <a href="{{song.artistLink}}" target="_blank"><p class="artist-name">{{song.artistName}}</p></a>
+    </div>
+</div>
