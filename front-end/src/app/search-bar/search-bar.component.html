@@ -1,0 +1,7 @@
+<div class="search-bar-container">
+    <span>
+        <input *ngIf="songMode" #searchPlaylist type="text" placeholder="Track Link | ex: 'https://open.spotify.com/track/2ykHFP6TmxkpL2aruI9yGQ?si=35985b4ca16942ec'" (keyup)="onKey($event)" (blur)="onBlur($event)">
+        <input *ngIf="!songMode" #searchPlaylist type="text" placeholder="Playlist Link | ex: 'https://open.spotify.com/playlist/2rN3mSrzUcgjlj1TcEDTX7?si=9592c49d47c14e0f'" (keyup)="onKey($event)" (blur)="onBlur($event)">
+        <button [ngClass]="{'hidden': inputValue == ''}" class="suggest-button" (click)="suggest()"><i class="fa-solid fa-magnifying-glass"></i></button>
+    </span>
+</div>

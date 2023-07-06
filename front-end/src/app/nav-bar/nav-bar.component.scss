@@ -1,0 +1,21 @@
+nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: rgb(35, 35, 35);
+    padding: 1rem;
+
+    i {
+        color: whitesmoke;
+        transition: color 100ms ease-in-out;
+        padding: 0.5rem;
+
+        &:hover {
+            color: rgb(31, 214, 96);
+        }
+    }
+
+    h1 {
+        color: rgb(31, 214, 96);
+    }
+}
