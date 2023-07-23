@@ -38,7 +38,7 @@ export class SearchBarComponent {
   }
 
   suggest() {
-    if (this.inputValue.indexOf("track")) {
+    if (this.inputValue.indexOf("track") != -1) {
       globalVars.setSongMode(true);
     }else {
       globalVars.setSongMode(false);
@@ -58,10 +58,12 @@ export class SearchBarComponent {
 
     if (this.songMode) {
       this.http.get<any>(`http://${this.ip}:${this.port}/trackrec?id=${this.id}`).subscribe(data => {
+        console.log(data);  
         globalVars.setApiResponse(data.tracks);
       });
     }else {
       this.http.get<any>(`http://${this.ip}:${this.port}/playlistrec?id=${this.id}`).subscribe(data => {
+        console.log(data);    
         globalVars.setApiResponse(data.tracks);
       });
     }
